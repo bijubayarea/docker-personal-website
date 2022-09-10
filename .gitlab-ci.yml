@@ -1,0 +1,133 @@
+
+#image: docker:latest
+#
+#stages:
+#  - deploy
+#
+#services:
+#  - docker:dind
+#
+#before_script:
+#  - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+#
+#build_push_image:
+#  stage: deploy
+#  script:
+#    - docker build --pull -t "$CI_REGISTRY_IMAGE" .
+#    - docker push "$CI_REGISTRY_IMAGE"
+
+# When using dind, it's wise to use the overlayfs driver for
+# improved performance.
+variables:
+  DOCKER_DRIVER: overlay
+  #DOCKER_HOST: tcp://localhost:2375
+  REGISTRY_SLASH: "$CI_REGISTRY_IMAGE/"
+  COLON_TAG: ":1.0.0"
+
+
+## Official docker image, try not to use latest tag.
+image: docker:19.03.1
+
+services:
+  - docker:19.03.1-dind
+
+## Should contain at least these three stages(build, review, deploy) for a basic CI/CD
+# deploy is done by another pipeline
+stages:
+  - check
+  - build
+  - test
+  - release
+  - deploy
+
+
+
+cache:
+  paths:
+
+
+before_script:
+  - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+  #- docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
+
+check:
+  stage: check
+  script:
+    - export DOCKER_HOST=$DOCKER_HOST_VAR
+    - echo using DOCKER_HOST=$DOCKER_HOST
+    - echo "CI_COMMIT_REF_SLUG = $CI_COMMIT_REF_SLUG"
+    - echo "CI_REGISTRY_IMAGE = $CI_REGISTRY_IMAGE"
+    - echo "CI_COMMIT_SHORT_SHA = $CI_COMMIT_SHORT_SHA"
+    - docker info
+
+
+build:
+  stage: build
+  script:
+    - docker build --pull -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF .
+    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF
+  except:
+    - tags
+
+
+Unit Tests:
+  stage: test
+
+  image: $CI_REGISTRY_IMAGE:$CI_BUILD_REF
+  services: []
+  before_script: []
+  script:
+    - echo "put unit tests here"
+  except:
+    - tags
+
+
+Integration Tests:
+  stage: test
+
+  image: $CI_REGISTRY_IMAGE:$CI_BUILD_REF
+  services: []
+  before_script: []
+  script:
+    - echo "put integration tests here"
+  except:
+    - tags
+
+
+Lint:
+  stage: test
+  script:
+    - echo "put linting here"
+
+SAST:
+  stage: test
+  script:
+    - echo "PUT SAST CHECK HERE"
+
+
+# Non-master branches and tags will be released with :<ref_name> as the tag
+release-by-name:
+  stage: release
+  script:
+    - docker pull $CI_REGISTRY_IMAGE:$CI_BUILD_REF
+    - docker tag $CI_REGISTRY_IMAGE:$CI_BUILD_REF $CI_REGISTRY_IMAGE:$CI_BUILD_REF_NAME
+    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF
+  except:
+    - master
+
+# Master will be released with :latest as the tag
+release-master:
+  stage: release
+  script:
+    - docker pull $CI_REGISTRY_IMAGE:$CI_BUILD_REF
+    - docker tag $CI_REGISTRY_IMAGE:$CI_BUILD_REF $CI_REGISTRY_IMAGE:latest
+    - docker push $CI_REGISTRY_IMAGE:latest
+  only:
+    - master
+
+
+deploy:
+  stage: deploy
+  script:
+    - echo "Deployment is done using seperate pipeline for manageability"
+    - echo "DONE DONE DONE!!!"

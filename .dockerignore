@@ -1,0 +1,6 @@
+.git
+.settings
+.idea
+.data
+.gitlab-ci.yml
+node_modules
