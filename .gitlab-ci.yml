@@ -20,7 +20,7 @@
 # improved performance.
 variables:
   DOCKER_DRIVER: overlay
-  #DOCKER_HOST: tcp://localhost:2375
+  DOCKER_HOST: tcp://localhost:2375
   REGISTRY_SLASH: "$CI_REGISTRY_IMAGE/"
   COLON_TAG: ":1.0.0"
 
