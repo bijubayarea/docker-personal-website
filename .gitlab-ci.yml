@@ -1,36 +1,12 @@
 
-#image: docker:latest
-#
-#stages:
-#  - deploy
-#
-#services:
-#  - docker:dind
-#
-#before_script:
-#  - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
-#
-#build_push_image:
-#  stage: deploy
-#  script:
-#    - docker build --pull -t "$CI_REGISTRY_IMAGE" .
-#    - docker push "$CI_REGISTRY_IMAGE"
-
-# When using dind, it's wise to use the overlayfs driver for
-# improved performance.
 variables:
   DOCKER_DRIVER: overlay
-  DOCKER_HOST: tcp://localhost:2375
-  REGISTRY_SLASH: "$CI_REGISTRY_IMAGE/"
-  COLON_TAG: ":1.0.0"
-
-
 
 ## Official docker image, try not to use latest tag.
-image: docker:19.03.1
+image: docker:stable
 
 services:
-  - docker:19.03.1-dind
+  - docker:stable-dind
 
 ## Should contain at least these three stages(build, review, deploy) for a basic CI/CD
 # deploy is done by another pipeline
@@ -42,57 +18,54 @@ stages:
   - deploy
 
 
-
 cache:
   paths:
 
 
 before_script:
-  #- docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   - docker login -u $CI_REGISTRY_USER -p $CI_BUILD_TOKEN $CI_REGISTRY
 
 check:
   stage: check
   script:
-    - export DOCKER_HOST=$DOCKER_HOST_VAR
-    - echo using DOCKER_HOST=$DOCKER_HOST
     - echo "CI_COMMIT_REF_SLUG = $CI_COMMIT_REF_SLUG"
     - echo "CI_REGISTRY_IMAGE = $CI_REGISTRY_IMAGE"
     - echo "CI_COMMIT_SHORT_SHA = $CI_COMMIT_SHORT_SHA"
     - echo "CI_BUILD_REF = $CI_BUILD_REF"
-    - export
-    - docker info
 
 
 build:
   stage: build
   script:
-    - docker build --pull -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF .
-    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF
+    - docker build --pull -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA .
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
   except:
     - tags
 
 
 Unit Tests:
   stage: test
-
-  image: $CI_REGISTRY_IMAGE:$CI_BUILD_REF
-  services: []
-  before_script: []
+  image: docker:stable
+  services:
+  - name: docker:stable-dind
+    alias: docker
   script:
     - echo "put unit tests here"
+    - docker run -d -p 3000:80 $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    - apk add curl
+    - curl http://docker:3000/ | grep 'Biju Joseph'
   except:
     - tags
 
 
 Integration Tests:
   stage: test
-
-  image: $CI_REGISTRY_IMAGE:$CI_BUILD_REF
-  services: []
-  before_script: []
+#  services:
+#    - name: $CI_REGISTRY_IMAGE:$CI_BUILD_REF
+#      alias: personal-website
   script:
     - echo "put integration tests here"
+#    - curl http://personal-website:80/
   except:
     - tags
 
@@ -112,9 +85,9 @@ SAST:
 release-by-name:
   stage: release
   script:
-    - docker pull $CI_REGISTRY_IMAGE:$CI_BUILD_REF
-    - docker tag $CI_REGISTRY_IMAGE:$CI_BUILD_REF $CI_REGISTRY_IMAGE:$CI_BUILD_REF_NAME
-    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF
+    - docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA $CI_REGISTRY_IMAGE:$CI_BUILD_REF_NAME
+    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF_NAME
   except:
     - master
 
@@ -122,8 +95,8 @@ release-by-name:
 release-master:
   stage: release
   script:
-    - docker pull $CI_REGISTRY_IMAGE:$CI_BUILD_REF
-    - docker tag $CI_REGISTRY_IMAGE:$CI_BUILD_REF $CI_REGISTRY_IMAGE:latest
+    - docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    - docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA $CI_REGISTRY_IMAGE:latest
     - docker push $CI_REGISTRY_IMAGE:latest
   only:
     - master
@@ -134,3 +107,6 @@ deploy:
   script:
     - echo "Deployment is done using seperate pipeline for manageability"
     - echo "DONE DONE DONE!!!"
+  when: manual
+  allow_failure: false
+
